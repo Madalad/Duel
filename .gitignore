@@ -1,0 +1,15 @@
+node_modules
+.env
+coverage
+coverage.json
+typechain
+typechain-types
+gas-report.txt
+gas-report-avax-bet-comparison.txt
+gas-report-eth-bet-comparison.txt
+notes.txt
+
+#Hardhat files
+cache
+artifacts
+yarn.lock
