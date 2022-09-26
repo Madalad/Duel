@@ -87,6 +87,60 @@ const {
                       .to.emit(duel, "Entered")
                       .withArgs(8, deployer.address)
               })
+              it("should handle high volume of entrants", async function () {
+                  const accounts = await ethers.getSigners()
+
+                  // send usd
+                  for (let i = 0; i < 10; i++) {
+                      await mockUSDC.transfer(accounts[i].address, entranceFee)
+                      await mockUSDC
+                          .connect(accounts[i])
+                          .approve(duel.address, entranceFee)
+                  }
+
+                  // enter
+                  for (let i = 0; i < 9; i++) {
+                      duel.connect(accounts[i]).enter()
+                  }
+                  const txResponse = await duel.connect(accounts[9]).enter()
+                  await txResponse.wait()
+
+                  assert.equal(
+                      (await mockUSDC.balanceOf(duel.address)).toString(),
+                      (entranceFee * 10).toString()
+                  )
+
+                  // settle
+                  for (let i = 0; i < 5; i++) {
+                      await new Promise(async (resolve, reject) => {
+                          duel.once("RoundSettled", async () => {
+                              resolve()
+                          })
+                          await vrfCoordinatorV2Mock.fulfillRandomWords(
+                              i + 1, // requestId
+                              duel.address
+                          )
+                      })
+                  }
+
+                  // assert
+                  assert(
+                      ["50000000", "60000000"].includes(
+                          (
+                              await mockUSDC.balanceOf(accounts[0].address)
+                          ).toString()
+                      )
+                  )
+                  for (let i = 1; i < 10; i++) {
+                      assert(
+                          ["0", "10000000"].includes(
+                              (
+                                  await mockUSDC.balanceOf(accounts[i].address)
+                              ).toString()
+                          )
+                      )
+                  }
+              })
           })
           describe("settle round", function () {
               it("should settle automatically when second user enters", async function () {

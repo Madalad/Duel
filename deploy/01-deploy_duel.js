@@ -53,8 +53,6 @@ module.exports = async ({ getNamedAccounts, deployments }) => {
         waitConfirmations: network.config.blockConfirmations || 1,
     })
 
-    log(VRFCoordinatorV2Mock.address)
-
     /*if (developmentChains.includes(network.name)) {
         // add consumer
         await VRFCoordinatorV2Mock.addConsumer(subscriptionId, duel.address)

@@ -3,12 +3,13 @@
 import "@chainlink/contracts/src/v0.8/interfaces/VRFCoordinatorV2Interface.sol";
 import "@chainlink/contracts/src/v0.8/VRFConsumerBaseV2.sol";
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
+import "@openzeppelin/contracts/access/Ownable.sol";
 
 pragma solidity ^0.8.7;
 
 error Duel__InsufficientFunds();
 
-contract Duel is VRFConsumerBaseV2 {
+contract Duel is VRFConsumerBaseV2, Ownable {
     VRFCoordinatorV2Interface private immutable i_vrfCoordinator;
     address private immutable i_coordinatorAddress;
     bytes32 private immutable i_keyHash;
@@ -17,7 +18,7 @@ contract Duel is VRFConsumerBaseV2 {
     uint32 private constant CALLBACK_GAS_LIMIT = 500000;
     uint32 private constant NUM_WORDS = 1;
 
-    ERC20 public USDc;
+    ERC20 public USDC;
     uint256 public entranceFee;
     address[] public entrants;
     uint8 public NUM_PLAYERS = 2;
@@ -38,7 +39,7 @@ contract Duel is VRFConsumerBaseV2 {
     );
 
     constructor(
-        address _usdcAddress,
+        address _USDCAddress,
         uint256 _entranceFee,
         uint64 _subscriptionId,
         bytes32 _keyHash,
@@ -46,7 +47,7 @@ contract Duel is VRFConsumerBaseV2 {
         uint16 _rake,
         address _vaultAddress
     ) VRFConsumerBaseV2(_coordinatorAddress) {
-        USDc = ERC20(_usdcAddress);
+        USDC = ERC20(_USDCAddress);
         entranceFee = _entranceFee;
         i_vrfCoordinator = VRFCoordinatorV2Interface(_coordinatorAddress);
         i_coordinatorAddress = _coordinatorAddress;
@@ -57,10 +58,10 @@ contract Duel is VRFConsumerBaseV2 {
     }
 
     function enter() external {
-        if (USDc.balanceOf(msg.sender) < entranceFee) {
+        if (USDC.balanceOf(msg.sender) < entranceFee) {
             revert Duel__InsufficientFunds();
         }
-        USDc.transferFrom(msg.sender, address(this), entranceFee);
+        USDC.transferFrom(msg.sender, address(this), entranceFee);
         entrants.push(msg.sender);
         emit Entered(block.number, msg.sender);
         if (entrants.length == NUM_PLAYERS) {
@@ -70,7 +71,6 @@ contract Duel is VRFConsumerBaseV2 {
 
     function requestRandomWords() public /* internal */
     {
-        //s_acceptingBets = false;
         uint256 requestId = i_vrfCoordinator.requestRandomWords(
             i_keyHash,
             i_subscriptionId,
@@ -96,8 +96,10 @@ contract Duel is VRFConsumerBaseV2 {
     ) public {
         uint256 indexOfWinner = randomWords[0] % 2;
         address winner = requestIdToEntrants[requestId][indexOfWinner];
-        uint256 potAmount = (entranceFee * 2 * (10000 - s_rake)) / 10000;
-        USDc.transfer(winner, potAmount);
+        uint256 raked = entranceFee * 2 * s_rake / 10000;
+        uint256 potAmount = entranceFee * 2 - raked;
+        USDC.transfer(winner, potAmount);
+        USDC.transfer(s_vaultAddress, raked);
         emit RoundSettled(block.number, potAmount, winner);
         address[] memory temp;
         requestIdToEntrants[requestId] = temp;
@@ -127,4 +129,12 @@ contract Duel is VRFConsumerBaseV2 {
         return i_subscriptionId;
     }
 
+    function getCountEntrants() external view returns(uint256) {
+        return entrants.length;
+    }
+
+    function setRake(uint16 _newRake) external onlyOwner {
+        require(_newRake < 10000, "Cannot set rake to >100%.");
+        s_rake = _newRake;
+    }
 }
